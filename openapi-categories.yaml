@@ -1,0 +1,261 @@
+openapi: 3.0.3
+info:
+  title: DepensePro Categories API
+  version: 1.0.0
+  description: Authenticated endpoints to list, create, retrieve, update, and delete the current user's categories.
+servers:
+  - url: http://10.145.121.246:8000/api
+    description: Private network server; client must be on an authorized LAN or VPN.
+security:
+  - TokenAuth: []
+tags:
+  - name: Categories
+paths:
+  /categories/:
+    get:
+      tags: [Categories]
+      operationId: listCategories
+      summary: List the authenticated user's categories
+      responses:
+        "200":
+          description: Paginated category list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryPage"
+              example:
+                count: 1
+                next: null
+                previous: null
+                results:
+                  - id: 1
+                    name: Transport
+                    kind: expense
+                    color: "#2563EB"
+                    icon: "🚗"
+                    created_at: "2026-11-13T10:00:00Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Categories]
+      operationId: createCategory
+      summary: Create a category for the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryWrite"
+            example:
+              name: Transport
+              kind: expense
+              color: "#2563EB"
+              icon: "🚗"
+      responses:
+        "201":
+          description: Category created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /categories/{id}/:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        description: Category ID.
+        schema:
+          type: integer
+    get:
+      tags: [Categories]
+      operationId: getCategory
+      summary: Retrieve one of the authenticated user's categories
+      responses:
+        "200":
+          description: Category details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Categories]
+      operationId: replaceCategory
+      summary: Replace a category's editable fields
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryWrite"
+      responses:
+        "200":
+          description: Category updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Categories]
+      operationId: updateCategory
+      summary: Partially update a category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryPatch"
+            example:
+              name: Transport public
+              color: "#16A34A"
+      responses:
+        "200":
+          description: Category updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Categories]
+      operationId: deleteCategory
+      summary: Delete a category not referenced by transactions
+      description: Returns 409 if the category has transactions; those transactions must remain associated with their category.
+      responses:
+        "204":
+          description: Category deleted; no response body.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Category is referenced by one or more transactions and cannot be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Cette catégorie est utilisée par des transactions et ne peut pas être supprimée.
+components:
+  securitySchemes:
+    TokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: "Send the login token as: Token <token>"
+  schemas:
+    CategoryWrite:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 80
+          example: Transport
+        kind:
+          type: string
+          enum: [expense, income]
+          default: expense
+        color:
+          type: string
+          maxLength: 7
+          default: "#2563EB"
+          example: "#2563EB"
+        icon:
+          type: string
+          maxLength: 12
+          default: "📦"
+          example: "🚗"
+    CategoryPatch:
+      type: object
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          maxLength: 80
+        kind:
+          type: string
+          enum: [expense, income]
+        color:
+          type: string
+          maxLength: 7
+        icon:
+          type: string
+          maxLength: 12
+    Category:
+      allOf:
+        - $ref: "#/components/schemas/CategoryWrite"
+        - type: object
+          required: [id, created_at]
+          properties:
+            id:
+              type: integer
+              example: 1
+            created_at:
+              type: string
+              format: date-time
+    CategoryPage:
+      type: object
+      required: [count, next, previous, results]
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+    ValidationError:
+      type: object
+      description: Validation errors keyed by field.
+      additionalProperties:
+        type: array
+        items:
+          type: string
+  responses:
+    Unauthorized:
+      description: Missing or invalid authentication token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Category does not exist or is not owned by the authenticated user.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ValidationError:
+      description: Invalid category data.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationError"

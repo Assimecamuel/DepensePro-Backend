@@ -1,0 +1,7 @@
+Django>=5.2,<5.3
+djangorestframework>=3.16,<3.17
+django-cors-headers>=4.7,<5
+Pillow>=11.0
+python-dotenv>=1.0,<2
+# PostgreSQL production driver (SQLite remains the local default)
+psycopg[binary]>=3.2,<4

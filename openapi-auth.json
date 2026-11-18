@@ -1,0 +1,679 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "DepensePro Authentication API",
+    "version": "1.1.0",
+    "description": "Contrat API d'authentification destiné au frontend. Les endpoints de récupération du mot de passe fonctionnent avec un code OTP envoyé par email."
+  },
+  "servers": [
+    {
+      "url": "http://10.145.121.246:8000/api",
+      "description": "Serveur du réseau local. Le téléphone et le serveur doivent être sur le même réseau."
+    }
+  ],
+  "tags": [
+    {
+      "name": "Authentication",
+      "description": "Inscription, connexion et récupération du mot de passe."
+    }
+  ],
+  "paths": {
+    "/auth/register/": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "operationId": "register",
+        "summary": "Créer un compte",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistrationRequest"
+              },
+              "example": {
+                "name": "Alex Doe",
+                "email": "alex@example.com",
+                "password": "StrongPassword123!",
+                "password_confirmation": "StrongPassword123!"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Compte créé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides, email déjà utilisé ou mots de passe différents.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login/": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "operationId": "login",
+        "summary": "Se connecter",
+        "description": "Le champ email accepte l'adresse email ou le nom d'utilisateur.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              },
+              "example": {
+                "email": "alex@example.com",
+                "password": "StrongPassword123!"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Connexion réussie.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Identifiants incorrects.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/password/forgot/": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "operationId": "forgotPassword",
+        "summary": "Demander un code OTP",
+        "description": "Demande l'envoi d'un OTP à l'adresse email du compte. Si EMAIL_BACKEND est réglé sur le backend console, aucun email n'est envoyé; en mode DEBUG le code est fourni pour les tests. Pour éviter de révéler si une adresse existe, une adresse inconnue reçoit également une réponse générique HTTP 200.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              },
+              "example": {
+                "email": "alex@example.com"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Demande traitée. Le format est générique pour une adresse inconnue et détaillé lorsqu'un compte est trouvé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ForgotPasswordAccepted"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GenericMessage"
+                    }
+                  ]
+                },
+                "examples": {
+                  "accountFound": {
+                    "summary": "Compte trouvé",
+                    "value": {
+                      "detail": "Un code OTP a été envoyé à votre adresse email.",
+                      "email": "alex@example.com",
+                      "expires_in_minutes": 10
+                    }
+                  },
+                  "generic": {
+                    "summary": "Réponse générique",
+                    "value": {
+                      "detail": "Si un compte est associé à cet email, un code OTP a été envoyé."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Adresse email absente ou invalide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Échec de l'envoi SMTP. L'OTP généré est invalidé et ne peut pas être utilisé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailError"
+                },
+                "example": {
+                  "detail": "Impossible d'envoyer l'email pour le moment. Vérifiez la configuration SMTP du serveur."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/password/verify-otp/": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "operationId": "verifyPasswordResetOtp",
+        "summary": "Vérifier le code OTP",
+        "description": "Vérifie l'OTP et son expiration. Un OTP est composé de 6 chiffres et expire après 5 minutes.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyOtpRequest"
+              },
+              "example": {
+                "email": "alex@example.com",
+                "otp": "123456"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP valide.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyOtpResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "OTP invalide ou expiré, ou adresse inconnue.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorOrDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/password/reset/": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "operationId": "resetPassword",
+        "summary": "Définir un nouveau mot de passe",
+        "description": "Envoie de nouveau l'email, l'OTP et le mot de passe confirmé. Le serveur vérifie l'OTP une nouvelle fois et l'invalide après la réinitialisation.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              },
+              "example": {
+                "email": "alex@example.com",
+                "otp": "123456",
+                "password": "NewStrongPassword123!",
+                "password_confirmation": "NewStrongPassword123!"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mot de passe modifié.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetPasswordResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "OTP invalide/expiré, email inconnu ou mots de passe différents.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout/": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "operationId": "logout",
+        "summary": "Se déconnecter",
+        "description": "Supprime le token d'authentification actuel.",
+        "security": [
+          {
+            "TokenAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Déconnexion réussie.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token absent ou invalide."
+          }
+        }
+      }
+    },
+    "/auth/me/": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "operationId": "getCurrentUser",
+        "summary": "Obtenir le profil connecté",
+        "security": [
+          {
+            "TokenAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Informations du compte connecté.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUser"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token absent ou invalide."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "TokenAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Envoyer le token DRF sous la forme : Token <token>"
+      }
+    },
+    "schemas": {
+      "RegistrationRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "email",
+          "password",
+          "password_confirmation"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 150
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 150
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "minLength": 8,
+            "writeOnly": true
+          },
+          "password_confirmation": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true
+          }
+        }
+      },
+      "RegistrationResponse": {
+        "type": "object",
+        "required": [
+          "detail",
+          "user"
+        ],
+        "properties": {
+          "detail": {
+            "type": "string",
+            "example": "Account created successfully."
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Adresse email ou nom d'utilisateur."
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true
+          }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "required": [
+          "token",
+          "user"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Token DRF à stocker de manière sécurisée."
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "email"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          }
+        }
+      },
+      "ForgotPasswordRequest": {
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 150
+          }
+        }
+      },
+      "ForgotPasswordAccepted": {
+        "type": "object",
+        "required": [
+          "detail",
+          "email",
+          "expires_in_minutes"
+        ],
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "expires_in_minutes": {
+            "type": "integer",
+            "example": 10
+          }
+        }
+      },
+      "GenericMessage": {
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "properties": {
+          "detail": {
+            "type": "string",
+            "example": "Si un compte est associé à cet email, un code OTP a été envoyé."
+          }
+        }
+      },
+      "VerifyOtpRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "otp"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "otp": {
+            "type": "string",
+            "pattern": "^[0-9]{6}$",
+            "example": "123456"
+          }
+        }
+      },
+      "VerifyOtpResponse": {
+        "type": "object",
+        "required": [
+          "detail",
+          "email",
+          "verified"
+        ],
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "verified": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        }
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "otp",
+          "password",
+          "password_confirmation"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "otp": {
+            "type": "string",
+            "pattern": "^[0-9]{6}$"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "minLength": 8,
+            "writeOnly": true
+          },
+          "password_confirmation": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true
+          }
+        }
+      },
+      "ResetPasswordResponse": {
+        "type": "object",
+        "required": [
+          "detail",
+          "email"
+        ],
+        "properties": {
+          "detail": {
+            "type": "string",
+            "example": "Mot de passe réinitialisé avec succès."
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          }
+        }
+      },
+      "CurrentUser": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "email",
+          "currency",
+          "theme",
+          "notifications_enabled"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "light",
+              "dark"
+            ]
+          },
+          "notifications_enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DetailResponse": {
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "properties": {
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "DetailError": {
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "properties": {
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "ValidationError": {
+        "type": "object",
+        "description": "Erreurs de validation indexées par nom de champ.",
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "ValidationErrorOrDetail": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ValidationError"
+          },
+          {
+            "$ref": "#/components/schemas/DetailError"
+          }
+        ]
+      }
+    }
+  }
+}

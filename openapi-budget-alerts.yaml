@@ -1,0 +1,514 @@
+openapi: 3.0.3
+info:
+  title: DepensePro Budget Alerts API
+  version: 1.0.0
+  description: >
+    Contract for daily budgets, budget thresholds, and notification preferences.
+    This API supports monthly, yearly, and daily budgets, plus alert rules for
+    low budget usage, high usage, and exceeding a defined limit.
+servers:
+  - url: http://10.145.121.246:8000/api
+    description: Private LAN server for the app.
+security:
+  - TokenAuth: []
+tags:
+  - name: Budgets
+  - name: Notifications
+paths:
+  /budgets/:
+    get:
+      tags: [Budgets]
+      operationId: listBudgets
+      summary: List budgets for a selected period.
+      parameters:
+        - in: query
+          name: period_type
+          schema:
+            type: string
+            enum: [daily, monthly, yearly]
+          description: Period type for the budget.
+        - in: query
+          name: date
+          schema:
+            type: string
+            format: date
+          description: Used for daily budgets, e.g. 2026-11-12.
+        - in: query
+          name: month
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+        - in: query
+          name: year
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 32767
+      responses:
+        '200':
+          description: List of budgets.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetPage'
+    post:
+      tags: [Budgets]
+      operationId: createBudget
+      summary: Create a budget for a category.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetCreateRequest'
+            examples:
+              daily:
+                summary: Budget quotidien
+                value:
+                  category: 4
+                  amount: "500.00"
+                  period_type: daily
+                  date: "2026-11-12"
+                  alert_thresholds:
+                    low_percent: 25
+                    warning_percent: 70
+                    critical_percent: 100
+                    max_spend_amount: "450.00"
+                    notify_channels:
+                      - in_app
+                      - email
+              monthly:
+                summary: Budget mensuel
+                value:
+                  category: 5
+                  amount: "80000.00"
+                  period_type: monthly
+                  month: 11
+                  year: 2026
+                  alert_thresholds:
+                    low_percent: 30
+                    warning_percent: 80
+                    critical_percent: 100
+                    max_spend_amount: "75000.00"
+                    notify_channels:
+                      - in_app
+      responses:
+        '201':
+          description: Budget created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /budgets/{id}/:
+    get:
+      tags: [Budgets]
+      operationId: getBudget
+      summary: Retrieve a budget and its live status.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Budget details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Budgets]
+      operationId: updateBudget
+      summary: Update budget amount or alert configuration.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetUpdateRequest'
+            example:
+              amount: "600.00"
+              alert_thresholds:
+                low_percent: 20
+                warning_percent: 80
+                critical_percent: 100
+                max_spend_amount: "500.00"
+                notify_channels:
+                  - in_app
+                  - email
+      responses:
+        '200':
+          description: Budget updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Budgets]
+      operationId: deleteBudget
+      summary: Delete a budget.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Budget deleted.
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /budgets/alerts/:
+    get:
+      tags: [Budgets]
+      operationId: listBudgetAlerts
+      summary: List active budget alerts for the user.
+      responses:
+        '200':
+          description: Current alerts triggered by budgets.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetAlertPage'
+
+  /budget-notifications/:
+    get:
+      tags: [Notifications]
+      operationId: getNotificationSettings
+      summary: Retrieve notification preferences.
+      responses:
+        '200':
+          description: Notification preferences for the current user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationSettings'
+    patch:
+      tags: [Notifications]
+      operationId: updateNotificationSettings
+      summary: Configure notification channels and defaults.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationSettingsUpdate'
+            example:
+              enabled: true
+              channels:
+                - in_app
+                - email
+              email_enabled: true
+              push_enabled: false
+              quiet_hours:
+                start: "22:00"
+                end: "07:00"
+      responses:
+        '200':
+          description: Notification settings updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationSettings'
+
+components:
+  securitySchemes:
+    TokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Format: Token <token>
+  schemas:
+    BudgetCreateRequest:
+      type: object
+      required: [category, amount, period_type]
+      properties:
+        category:
+          type: integer
+          description: Expense category owned by the authenticated user.
+          example: 4
+        amount:
+          type: string
+          pattern: "^[0-9]+(\\.[0-9]{1,2})?$"
+          description: Budget ceiling.
+          example: "500.00"
+        period_type:
+          type: string
+          enum: [daily, monthly, yearly]
+          example: daily
+        date:
+          type: string
+          format: date
+          description: Required for daily budgets.
+          example: "2026-11-12"
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: Required for monthly budgets.
+        year:
+          type: integer
+          minimum: 1
+          maximum: 32767
+          description: Required for monthly/yearly budgets.
+        alert_thresholds:
+          $ref: '#/components/schemas/AlertThresholds'
+
+    BudgetUpdateRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          pattern: "^[0-9]+(\\.[0-9]{1,2})?$"
+        period_type:
+          type: string
+          enum: [daily, monthly, yearly]
+        date:
+          type: string
+          format: date
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+        year:
+          type: integer
+          minimum: 1
+          maximum: 32767
+        alert_thresholds:
+          $ref: '#/components/schemas/AlertThresholds'
+
+    AlertThresholds:
+      type: object
+      properties:
+        low_percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 25
+          description: Notification threshold when budget usage is low but approaching the limit.
+        warning_percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 70
+          description: Warning threshold, usually 70% or 80%.
+        critical_percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 100
+          description: Critical threshold when budget is reached or exceeded.
+        max_spend_amount:
+          type: string
+          pattern: "^[0-9]+(\\.[0-9]{1,2})?$"
+          description: Optional maximum amount that should trigger an immediate warning if exceeded.
+          example: "450.00"
+        notify_channels:
+          type: array
+          items:
+            type: string
+            enum: [in_app, email, sms]
+          example:
+            - in_app
+            - email
+
+    Budget:
+      type: object
+      required: [id, category, category_name, amount, period_type, spent, remaining, percentage, alert]
+      properties:
+        id:
+          type: integer
+          example: 12
+        category:
+          type: integer
+          example: 4
+        category_name:
+          type: string
+          example: Transport
+        amount:
+          type: string
+          example: "500.00"
+        period_type:
+          type: string
+          enum: [daily, monthly, yearly]
+          example: daily
+        date:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-11-12"
+        month:
+          type: integer
+          nullable: true
+          example: 11
+        year:
+          type: integer
+          example: 2026
+        spent:
+          type: string
+          example: "420.00"
+        remaining:
+          type: string
+          example: "80.00"
+        percentage:
+          type: number
+          format: float
+          example: 84.0
+        alert:
+          $ref: '#/components/schemas/BudgetAlert'
+        alert_thresholds:
+          $ref: '#/components/schemas/AlertThresholds'
+
+    BudgetAlert:
+      type: object
+      required: [code, level, message, triggered_at]
+      properties:
+        code:
+          type: string
+          enum: [LOW_BUDGET, WARNING_80, CRITICAL_100, EXCESS_LIMIT]
+        level:
+          type: string
+          enum: [info, warning, critical]
+        message:
+          type: string
+          example: Votre budget est déjà à 84 % de consommation.
+        triggered_at:
+          type: string
+          format: date-time
+          example: "2026-11-12T10:10:00Z"
+
+    BudgetPage:
+      type: object
+      required: [count, next, previous, results]
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Budget'
+
+    BudgetAlertPage:
+      type: object
+      required: [count, results]
+      properties:
+        count:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BudgetAlertItem'
+
+    BudgetAlertItem:
+      type: object
+      required: [id, budget_id, code, level, message, created_at]
+      properties:
+        id:
+          type: integer
+        budget_id:
+          type: integer
+        code:
+          type: string
+          enum: [LOW_BUDGET, WARNING_80, CRITICAL_100, EXCESS_LIMIT]
+        level:
+          type: string
+          enum: [info, warning, critical]
+        message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    NotificationSettings:
+      type: object
+      required: [enabled, channels, email_enabled, push_enabled]
+      properties:
+        enabled:
+          type: boolean
+          example: true
+        channels:
+          type: array
+          items:
+            type: string
+            enum: [in_app, email, sms]
+          example:
+            - in_app
+            - email
+        email_enabled:
+          type: boolean
+          example: true
+        push_enabled:
+          type: boolean
+          example: false
+        quiet_hours:
+          $ref: '#/components/schemas/QuietHours'
+
+    NotificationSettingsUpdate:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        channels:
+          type: array
+          items:
+            type: string
+            enum: [in_app, email, sms]
+        email_enabled:
+          type: boolean
+        push_enabled:
+          type: boolean
+        quiet_hours:
+          $ref: '#/components/schemas/QuietHours'
+
+    QuietHours:
+      type: object
+      properties:
+        start:
+          type: string
+          example: "22:00"
+        end:
+          type: string
+          example: "07:00"
+
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          example: Invalid budget payload.
+
+  responses:
+    ValidationError:
+      description: Invalid request data.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

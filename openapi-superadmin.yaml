@@ -1,0 +1,884 @@
+openapi: 3.0.3
+info:
+  title: DepensePro Super Admin API
+  version: 1.0.0
+  description: Contract API for the platform super administrator.
+servers:
+  - url: http://10.145.121.246:8000/api
+    description: Private LAN server for the app.
+security:
+  - TokenAuth: []
+tags:
+  - name: Auth
+  - name: Admin
+paths:
+  /auth/login/:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Connect a user or super admin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: assimecamuel@gmail.com
+              password: admin@1234
+      responses:
+        '200':
+          description: Authentication successful.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: Identifiants incorrects.
+
+  /admin/overview/:
+    get:
+      tags: [Admin]
+      operationId: getAdminOverview
+      summary: Dashboard overview for super admin
+      responses:
+        '200':
+          description: Summaries and recent activity.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminOverviewResponse'
+
+  /admin/users/:
+    get:
+      tags: [Admin]
+      operationId: listUsers
+      summary: List platform users
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [active, disabled]
+        - in: query
+          name: role
+          schema:
+            type: string
+            enum: [super_admin, admin, user]
+      responses:
+        '200':
+          description: Paginated user list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPage'
+    post:
+      tags: [Admin]
+      operationId: createUser
+      summary: Create a user account when required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreateRequest'
+            example:
+              username: newuser
+              email: newuser@example.com
+              password: StrongPassword123!
+              role: user
+              is_active: true
+      responses:
+        '201':
+          description: User created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDetail'
+
+  /admin/users/{id}/:
+    get:
+      tags: [Admin]
+      operationId: getUserById
+      summary: Retrieve a user profile and admin metadata
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Admin]
+      operationId: updateUserAdminData
+      summary: Update administrative fields of a user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+            example:
+              role: admin
+              is_active: true
+      responses:
+        '200':
+          description: User updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/users/{id}/status/:
+    patch:
+      tags: [Admin]
+      operationId: toggleUserStatus
+      summary: Enable or disable a user account
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusUpdateRequest'
+            example:
+              is_active: false
+      responses:
+        '200':
+          description: Account status updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStatusResponse'
+
+  /admin/users/{id}/permissions/:
+    patch:
+      tags: [Admin]
+      operationId: updateUserPermissions
+      summary: Update user role and permission flags
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PermissionsRequest'
+            example:
+              role: admin
+              is_staff: true
+              is_superuser: false
+      responses:
+        '200':
+          description: Permissions updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDetail'
+
+  /admin/categories/global/:
+    get:
+      tags: [Admin]
+      operationId: listGlobalCategories
+      summary: List global categories available on the platform
+      responses:
+        '200':
+          description: Global categories list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalCategoryPage'
+    post:
+      tags: [Admin]
+      operationId: createGlobalCategory
+      summary: Create a platform-wide category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GlobalCategoryCreateRequest'
+            example:
+              name: Santé
+              type: expense
+              color: '#EF4444'
+              icon: '🩺'
+              is_active: true
+      responses:
+        '201':
+          description: Category created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalCategory'
+
+  /admin/categories/global/{id}/:
+    patch:
+      tags: [Admin]
+      operationId: updateGlobalCategory
+      summary: Update a global category
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GlobalCategoryUpdateRequest'
+            example:
+              name: Santé & bien-être
+              color: '#F59E0B'
+      responses:
+        '200':
+          description: Category updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalCategory'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Admin]
+      operationId: deleteGlobalCategory
+      summary: Delete a global category
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Category deleted.
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/currencies/:
+    get:
+      tags: [Admin]
+      operationId: listCurrencies
+      summary: List supported currencies
+      responses:
+        '200':
+          description: Currencies list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrencyPage'
+    post:
+      tags: [Admin]
+      operationId: createCurrency
+      summary: Add a supported currency
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurrencyCreateRequest'
+            example:
+              code: EUR
+              name: Euro
+              symbol: '€'
+              is_active: true
+              is_default: false
+      responses:
+        '201':
+          description: Currency created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Currency'
+
+  /admin/currencies/{id}/:
+    patch:
+      tags: [Admin]
+      operationId: updateCurrency
+      summary: Update a currency state or default designation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurrencyUpdateRequest'
+            example:
+              is_default: true
+      responses:
+        '200':
+          description: Currency updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Currency'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/stats/:
+    get:
+      tags: [Admin]
+      operationId: getPlatformStats
+      summary: Retrieve aggregated usage statistics
+      responses:
+        '200':
+          description: Platform statistics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformStatsResponse'
+
+  /admin/settings/:
+    get:
+      tags: [Admin]
+      operationId: getPlatformSettings
+      summary: Retrieve global configuration
+      responses:
+        '200':
+          description: Platform settings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformSettings'
+    patch:
+      tags: [Admin]
+      operationId: updatePlatformSettings
+      summary: Update global platform settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformSettingsUpdateRequest'
+            example:
+              default_currency: XAF
+              allow_user_registration: true
+              maintenance_mode: false
+      responses:
+        '200':
+          description: Settings updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformSettings'
+components:
+  securitySchemes:
+    TokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Format: Token <token>
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: assimecamuel@gmail.com
+        password:
+          type: string
+          format: password
+          example: admin@1234
+
+    LoginResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+          description: DRF authentication token.
+          example: 7d4a8d1d9f4d5c9d...
+        user:
+          $ref: '#/components/schemas/UserDetail'
+
+    UserDetail:
+      type: object
+      required: [id, username, email, role, is_active, is_staff, is_superuser]
+      properties:
+        id:
+          type: integer
+          example: 1
+        username:
+          type: string
+          example: Camuel
+        email:
+          type: string
+          format: email
+          example: assimecamuel@gmail.com
+        role:
+          type: string
+          enum: [super_admin, admin, user]
+          example: super_admin
+        is_active:
+          type: boolean
+          example: true
+        is_staff:
+          type: boolean
+          example: true
+        is_superuser:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_login:
+          type: string
+          format: date-time
+          nullable: true
+        profile:
+          $ref: '#/components/schemas/UserProfile'
+
+    UserProfile:
+      type: object
+      properties:
+        currency:
+          type: string
+          example: XAF
+        theme:
+          type: string
+          enum: [light, dark]
+          example: light
+        notifications_enabled:
+          type: boolean
+          example: true
+
+    UserCreateRequest:
+      type: object
+      required: [username, email, password]
+      properties:
+        username:
+          type: string
+          example: newuser
+        email:
+          type: string
+          format: email
+          example: newuser@example.com
+        password:
+          type: string
+          format: password
+          example: StrongPassword123!
+        role:
+          type: string
+          enum: [user, admin, super_admin]
+          default: user
+        is_active:
+          type: boolean
+          default: true
+
+    UserUpdateRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [user, admin, super_admin]
+        is_active:
+          type: boolean
+
+    StatusUpdateRequest:
+      type: object
+      required: [is_active]
+      properties:
+        is_active:
+          type: boolean
+
+    UserStatusResponse:
+      type: object
+      required: [id, is_active, status]
+      properties:
+        id:
+          type: integer
+        is_active:
+          type: boolean
+        status:
+          type: string
+          enum: [active, disabled]
+
+    PermissionsRequest:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, admin, super_admin]
+        is_staff:
+          type: boolean
+        is_superuser:
+          type: boolean
+
+    UserPage:
+      type: object
+      required: [count, next, previous, results]
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserDetail'
+
+    GlobalCategory:
+      type: object
+      required: [id, name, type, color, icon, is_active]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          example: Transport
+        type:
+          type: string
+          enum: [expense, income]
+        color:
+          type: string
+          example: '#2563EB'
+        icon:
+          type: string
+          example: '🚗'
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+
+    GlobalCategoryCreateRequest:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+          example: Santé
+        type:
+          type: string
+          enum: [expense, income]
+        color:
+          type: string
+          example: '#EF4444'
+        icon:
+          type: string
+          example: '🩺'
+        is_active:
+          type: boolean
+          default: true
+
+    GlobalCategoryUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [expense, income]
+        color:
+          type: string
+        icon:
+          type: string
+        is_active:
+          type: boolean
+
+    GlobalCategoryPage:
+      type: object
+      required: [count, next, previous, results]
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlobalCategory'
+
+    Currency:
+      type: object
+      required: [id, code, name, symbol, is_active, is_default]
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+          example: XAF
+        name:
+          type: string
+          example: Franc CFA
+        symbol:
+          type: string
+          example: FCFA
+        is_active:
+          type: boolean
+          example: true
+        is_default:
+          type: boolean
+          example: true
+
+    CurrencyCreateRequest:
+      type: object
+      required: [code, name, symbol]
+      properties:
+        code:
+          type: string
+          example: EUR
+        name:
+          type: string
+          example: Euro
+        symbol:
+          type: string
+          example: €
+        is_active:
+          type: boolean
+          default: true
+        is_default:
+          type: boolean
+          default: false
+
+    CurrencyUpdateRequest:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        symbol:
+          type: string
+        is_active:
+          type: boolean
+        is_default:
+          type: boolean
+
+    CurrencyPage:
+      type: object
+      required: [count, next, previous, results]
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Currency'
+
+    PlatformStatsResponse:
+      type: object
+      properties:
+        platform:
+          type: object
+          properties:
+            total_users:
+              type: integer
+            active_users:
+              type: integer
+            disabled_users:
+              type: integer
+            new_users_last_30_days:
+              type: integer
+            new_users_last_7_days:
+              type: integer
+        categories:
+          type: object
+          properties:
+            global_categories:
+              type: integer
+            expense_categories:
+              type: integer
+            income_categories:
+              type: integer
+        transactions:
+          type: object
+          properties:
+            total_transactions:
+              type: integer
+            income_total:
+              type: number
+              format: float
+            expense_total:
+              type: number
+              format: float
+            avg_transaction_value:
+              type: number
+              format: float
+        activity:
+          type: object
+          properties:
+            daily_active_users:
+              type: integer
+            weekly_active_users:
+              type: integer
+            monthly_active_users:
+              type: integer
+
+    PlatformSettings:
+      type: object
+      required: [platform_name, default_currency, allow_user_registration, allow_guest_access, maintenance_mode, timezone, language]
+      properties:
+        platform_name:
+          type: string
+          example: DepensePro
+        default_currency:
+          type: string
+          example: XAF
+        allow_user_registration:
+          type: boolean
+          example: true
+        allow_guest_access:
+          type: boolean
+          example: false
+        maintenance_mode:
+          type: boolean
+          example: false
+        timezone:
+          type: string
+          example: Africa/Douala
+        language:
+          type: string
+          example: fr
+
+    PlatformSettingsUpdateRequest:
+      type: object
+      properties:
+        platform_name:
+          type: string
+        default_currency:
+          type: string
+        allow_user_registration:
+          type: boolean
+        allow_guest_access:
+          type: boolean
+        maintenance_mode:
+          type: boolean
+        timezone:
+          type: string
+        language:
+          type: string
+
+    AdminOverviewResponse:
+      type: object
+      required: [stats, recent_activity]
+      properties:
+        stats:
+          $ref: '#/components/schemas/AdminOverviewStats'
+        recent_activity:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityItem'
+
+    AdminOverviewStats:
+      type: object
+      properties:
+        total_users:
+          type: integer
+        active_users:
+          type: integer
+        disabled_users:
+          type: integer
+        total_global_categories:
+          type: integer
+        total_currencies:
+          type: integer
+        default_currency:
+          type: string
+        monthly_transactions:
+          type: integer
+        monthly_income:
+          type: number
+          format: float
+        monthly_expenses:
+          type: number
+          format: float
+
+    ActivityItem:
+      type: object
+      properties:
+        type:
+          type: string
+          example: user_registered
+        message:
+          type: string
+          example: Nouvel utilisateur inscrit
+        created_at:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          example: Identifiants incorrects.
+
+  responses:
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+            example:
+              detail: Not found.

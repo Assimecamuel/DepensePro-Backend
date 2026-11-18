@@ -1,0 +1,344 @@
+openapi: 3.0.3
+info:
+  title: DepensePro Budget API
+  version: 1.0.0
+  description: Authenticated endpoints for monthly and yearly category budgets.
+servers:
+  - url: http://10.145.121.246:8000/api
+    description: Private network server; reachable only from an authorized LAN or VPN.
+security:
+  - TokenAuth: []
+tags:
+  - name: Budgets
+paths:
+  /budgets/:
+    get:
+      tags: [Budgets]
+      operationId: listBudgets
+      summary: List budgets for one period
+      description: >
+        Results are scoped to the authenticated user and paginated (100 items per page).
+        Defaults to the current month and year when query parameters are omitted.
+      parameters:
+        - in: query
+          name: period_type
+          schema:
+            type: string
+            enum: [monthly, yearly]
+            default: monthly
+          description: Select monthly or yearly budgets.
+        - in: query
+          name: month
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+          description: Defaults to the current month for monthly filtering; ignored for yearly filtering.
+        - in: query
+          name: year
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 32767
+          description: Calendar year to filter.
+      responses:
+        "200":
+          description: Paginated budgets. Each item includes spent amount, remaining amount, usage percentage, and alert.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BudgetPage"
+              example:
+                count: 1
+                next: null
+                previous: null
+                results:
+                  - id: 21
+                    category: 4
+                    category_name: Food
+                    category_icon: food
+                    amount: "100000.00"
+                    period_type: monthly
+                    month: 11
+                    year: 2026
+                    spent: "80000.00"
+                    remaining: "20000.00"
+                    percentage: 80.0
+                    alert:
+                      code: BUDGET_80_PERCENT
+                      threshold: 80
+                      message: Vous avez utilisé au moins 80 % du budget de cette catégorie.
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Budgets]
+      operationId: createBudget
+      summary: Create a category budget
+      description: >
+        Use period_type monthly with month and year for a monthly budget.
+        Use period_type yearly with year and omit month for an annual budget.
+        If omitted, period_type, month, and year default to monthly and the current calendar period.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BudgetWrite"
+            examples:
+              monthly:
+                summary: Monthly category ceiling
+                value:
+                  category: 4
+                  amount: "100000.00"
+                  period_type: monthly
+                  month: 11
+                  year: 2026
+              yearly:
+                summary: Annual category ceiling
+                value:
+                  category: 4
+                  amount: "1200000.00"
+                  period_type: yearly
+                  year: 2026
+      responses:
+        "201":
+          description: Budget created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Budget"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /budgets/{id}/:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+        description: Budget identifier.
+    get:
+      tags: [Budgets]
+      operationId: getBudget
+      summary: Get budget details and current alert
+      responses:
+        "200":
+          description: Budget details with live spending totals.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Budget"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Budgets]
+      operationId: replaceBudget
+      summary: Replace a budget
+      description: Provide the budget fields to update. The category must belong to the authenticated user and be an expense category.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BudgetWrite"
+      responses:
+        "200":
+          description: Updated budget.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Budget"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Budgets]
+      operationId: updateBudget
+      summary: Update a budget or its spending ceiling
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BudgetPatch"
+            example:
+              amount: "125000.00"
+      responses:
+        "200":
+          description: Updated budget.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Budget"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Budgets]
+      operationId: deleteBudget
+      summary: Delete a budget
+      responses:
+        "204":
+          description: Budget deleted; no response body.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    TokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: "Send the login token as: Token <token>"
+  schemas:
+    BudgetWrite:
+      type: object
+      required: [category, amount]
+      properties:
+        category:
+          type: integer
+          description: ID of an expense category owned by the authenticated user.
+          example: 4
+        amount:
+          type: string
+          pattern: "^[0-9]+(\\.[0-9]{1,2})?$"
+          description: Positive budget ceiling, up to 2 decimal places.
+          example: "100000.00"
+        period_type:
+          type: string
+          enum: [monthly, yearly]
+          default: monthly
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: Month for monthly budgets; defaults to the current month. Omit for yearly budgets.
+        year:
+          type: integer
+          minimum: 1
+          maximum: 32767
+          description: Calendar year; defaults to the current year if omitted.
+    BudgetPatch:
+      type: object
+      minProperties: 1
+      properties:
+        category:
+          type: integer
+        amount:
+          type: string
+          pattern: "^[0-9]+(\\.[0-9]{1,2})?$"
+        period_type:
+          type: string
+          enum: [monthly, yearly]
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          nullable: true
+        year:
+          type: integer
+          minimum: 1
+          maximum: 32767
+    Budget:
+      allOf:
+        - $ref: "#/components/schemas/BudgetWrite"
+        - type: object
+          required: [id, category_name, category_icon, spent, remaining, percentage, alert]
+          properties:
+            id:
+              type: integer
+            category_name:
+              type: string
+            category_icon:
+              type: string
+            month:
+              type: integer
+              nullable: true
+              description: Null for yearly budgets.
+            spent:
+              type: string
+              description: Sum of expense transactions matching this category and period.
+            remaining:
+              type: string
+              description: max(amount - spent, 0).
+            percentage:
+              type: number
+              format: float
+              description: spent divided by amount, multiplied by 100. May exceed 100.
+            alert:
+              nullable: true
+              allOf:
+                - $ref: "#/components/schemas/BudgetAlert"
+              description: Null below 80%; warning at 80% to under 100%; exceeded at 100% or above.
+    BudgetAlert:
+      type: object
+      required: [code, threshold, message]
+      properties:
+        code:
+          type: string
+          enum: [BUDGET_80_PERCENT, BUDGET_100_PERCENT]
+        threshold:
+          type: integer
+          enum: [80, 100]
+        message:
+          type: string
+    BudgetPage:
+      type: object
+      required: [count, next, previous, results]
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/Budget"
+    ValidationError:
+      type: object
+      description: Validation errors keyed by field.
+      additionalProperties:
+        type: array
+        items:
+          type: string
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+  responses:
+    ValidationError:
+      description: Invalid period, amount, category, or duplicate budget.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationError"
+    Unauthorized:
+      description: Missing or invalid authentication token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Budget does not exist or is not owned by the authenticated user.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"

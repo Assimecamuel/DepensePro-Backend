@@ -1,0 +1,322 @@
+openapi: 3.0.3
+info:
+  title: DepensePro Notifications API
+  version: 1.0.0
+  description: >
+    In-app notifications, email notification preferences, and announcements
+    sent by a platform super administrator. Notifications are generated
+    automatically for transaction changes, budget threshold crossings, and
+    supported account security events.
+servers:
+  - url: http://192.168.100.132:8000/api
+    description: DepensePro backend on the local network.
+security:
+  - TokenAuth: []
+tags:
+  - name: Notifications
+  - name: Profile
+  - name: Admin announcements
+paths:
+  /notifications/:
+    get:
+      tags: [Notifications]
+      operationId: listNotifications
+      summary: List the authenticated user's latest notifications.
+      responses:
+        '200':
+          description: The latest 100 notifications and unread count.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /notifications/mark-all-read/:
+    post:
+      tags: [Notifications]
+      operationId: markAllNotificationsRead
+      summary: Mark all of the authenticated user's notifications as read.
+      responses:
+        '200':
+          description: Number of notifications updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarkAllReadResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /notifications/{id}/:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    patch:
+      tags: [Notifications]
+      operationId: updateNotification
+      summary: Update the read state of one of the authenticated user's notifications.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationUpdateRequest'
+            example:
+              is_read: true
+      responses:
+        '200':
+          description: Updated notification.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags: [Notifications]
+      operationId: deleteNotification
+      summary: Delete one of the authenticated user's notifications.
+      responses:
+        '204':
+          description: Notification deleted.
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /profile/:
+    get:
+      tags: [Profile]
+      operationId: getNotificationPreferences
+      summary: Retrieve profile and notification preferences.
+      responses:
+        '200':
+          description: Current user's profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      tags: [Profile]
+      operationId: updateNotificationPreferences
+      summary: Update profile notification preferences.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdateRequest'
+            example:
+              email_notifications_enabled: true
+      responses:
+        '200':
+          description: Preference update result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileUpdateResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/announcements/:
+    post:
+      tags: [Admin announcements]
+      operationId: sendAdminAnnouncement
+      summary: Publish an announcement as an authenticated super administrator.
+      description: >
+        Creates in-app notifications for active users with in-app notifications
+        enabled, and emails users who opted in to email notifications. SMTP
+        delivery failures are logged and reported in email_delivery_failed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnouncementRequest'
+            example:
+              title: Maintenance programmée
+              message: DepensePro sera en maintenance ce soir à 22 h.
+      responses:
+        '201':
+          description: Announcement published.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnouncementResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Authenticated user is not a Django superuser.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    TokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: 'DRF token format: Token <token>'
+  schemas:
+    Notification:
+      type: object
+      required: [id, title, message, kind, is_read, created_at]
+      properties:
+        id:
+          type: integer
+          example: 42
+        title:
+          type: string
+          example: Alerte budget
+        message:
+          type: string
+          example: Vous avez utilisé 80 % de votre budget Alimentation.
+        kind:
+          type: string
+          description: Notification category; values may be extended by the backend.
+          example: budget_warning
+        is_read:
+          type: boolean
+          example: false
+        created_at:
+          type: string
+          format: date-time
+    NotificationList:
+      type: object
+      required: [notifications, unread_count]
+      properties:
+        notifications:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        unread_count:
+          type: integer
+          example: 3
+    NotificationUpdateRequest:
+      type: object
+      required: [is_read]
+      properties:
+        is_read:
+          type: boolean
+    MarkAllReadResponse:
+      type: object
+      required: [ok, updated]
+      properties:
+        ok:
+          type: boolean
+          example: true
+        updated:
+          type: integer
+          example: 3
+    Profile:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        currency:
+          type: string
+        theme:
+          type: string
+          enum: [light, dark]
+        notifications_enabled:
+          type: boolean
+          description: Enables in-app notifications.
+        email_notifications_enabled:
+          type: boolean
+          description: Enables non-critical notification emails.
+        role:
+          type: string
+        is_staff:
+          type: boolean
+        is_superuser:
+          type: boolean
+    ProfileUpdateRequest:
+      type: object
+      properties:
+        currency:
+          type: string
+        theme:
+          type: string
+          enum: [light, dark]
+        notifications_enabled:
+          type: boolean
+        email_notifications_enabled:
+          type: boolean
+    ProfileUpdateResponse:
+      type: object
+      required: [ok, profile]
+      properties:
+        ok:
+          type: boolean
+          example: true
+        profile:
+          $ref: '#/components/schemas/Profile'
+    AnnouncementRequest:
+      type: object
+      required: [title, message]
+      properties:
+        title:
+          type: string
+          maxLength: 160
+        message:
+          type: string
+          maxLength: 5000
+    AnnouncementResponse:
+      type: object
+      required: [notifications_created, emails_sent, email_delivery_failed]
+      properties:
+        notifications_created:
+          type: integer
+          example: 20
+        emails_sent:
+          type: integer
+          example: 8
+        email_delivery_failed:
+          type: boolean
+          example: false
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          example: Invalid request data.
+    ValidationError:
+      type: object
+      additionalProperties: true
+      example:
+        title: [This field is required.]
+  responses:
+    ValidationError:
+      description: Request validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+    NotFound:
+      description: Notification not found for the authenticated user.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Missing or invalid authentication token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

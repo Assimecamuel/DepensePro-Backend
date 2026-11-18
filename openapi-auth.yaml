@@ -1,0 +1,357 @@
+openapi: 3.0.3
+info:
+  title: DepensePro Authentication API
+  version: 1.0.0
+  description: Registration and login endpoints for the DepensePro backend.
+servers:
+  - url: http://10.145.121.246:8000/api
+    description: Private network server; reachable only from an authorized LAN or VPN.
+tags:
+  - name: Authentication
+paths:
+  /auth/register/:
+    post:
+      tags: [Authentication]
+      operationId: register
+      summary: Create a user account
+      description: Public endpoint. Registration does not issue an authentication token; log in afterward.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegistrationRequest"
+            example:
+              name: Alex Doe
+              email: alex@example.com
+              password: StrongPassword123!
+              password_confirmation: StrongPassword123!
+      responses:
+        "201":
+          description: Account created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistrationResponse"
+              example:
+                detail: Account created successfully.
+                user:
+                  id: 12
+                  name: Alex Doe
+                  email: alex@example.com
+        "400":
+          description: Invalid input, duplicate email, or password mismatch.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+              examples:
+                duplicateEmail:
+                  summary: Email is already registered
+                  value:
+                    email:
+                      - An account with this email already exists.
+                passwordMismatch:
+                  summary: Passwords do not match
+                  value:
+                    password_confirmation:
+                      - Passwords do not match.
+  /auth/login/:
+    post:
+      tags: [Authentication]
+      operationId: login
+      summary: Authenticate a user
+      description: Public endpoint. The email field accepts either the account email address or username.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: alex@example.com
+              password: StrongPassword123!
+      responses:
+        "200":
+          description: Authentication succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+              example:
+                token: "0123456789abcdef0123456789abcdef01234567"
+                user:
+                  id: 12
+                  name: Alex Doe
+                  email: alex@example.com
+        "401":
+          description: Invalid email/username or password.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationError"
+              example:
+                detail: Identifiants incorrects.
+  /auth/password/forgot/:
+    post:
+      tags: [Authentication]
+      operationId: forgotPassword
+      summary: Request a password reset OTP
+      description: Django generates a 6-digit OTP, stores only its hash, and sends it by email. The OTP is never returned by the API.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+            example:
+              email: alex@example.com
+      responses:
+        "200":
+          description: OTP generated successfully, or a generic confirmation if the email is unknown.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForgotPasswordResponse"
+              example:
+                detail: Si un compte correspond à cette adresse, un code de réinitialisation lui sera envoyé.
+                expires_in_minutes: 5
+  /auth/password/verify-otp/:
+    post:
+      tags: [Authentication]
+      operationId: verifyPasswordResetOtp
+      summary: Verify the email OTP before resetting the password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyOtpRequest"
+            example:
+              email: alex@example.com
+              otp: "123456"
+      responses:
+        "200":
+          description: OTP is valid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyOtpResponse"
+              example:
+                detail: Code OTP validé. Vous pouvez maintenant réinitialiser votre mot de passe.
+                email: alex@example.com
+                verified: true
+        "400":
+          description: Invalid or expired OTP.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationError"
+              example:
+                detail: Code OTP invalide ou expiré.
+  /auth/password/reset/:
+    post:
+      tags: [Authentication]
+      operationId: resetPassword
+      summary: Reset the user's password with a valid OTP
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+            example:
+              email: alex@example.com
+              otp: "123456"
+              password: NewStrongPassword123!
+              password_confirmation: NewStrongPassword123!
+      responses:
+        "200":
+          description: Password updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResetPasswordResponse"
+              example:
+                detail: Mot de passe réinitialisé avec succès.
+                email: alex@example.com
+        "400":
+          description: OTP expired, invalid, or password mismatch.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+              example:
+                otp:
+                  - Le code OTP est invalide ou expiré.
+components:
+  securitySchemes:
+    TokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: "For protected endpoints, send: Token <token>"
+  schemas:
+    RegistrationRequest:
+      type: object
+      required: [name, email, password, password_confirmation]
+      properties:
+        name:
+          type: string
+          maxLength: 150
+          example: Alex Doe
+        email:
+          type: string
+          format: email
+          maxLength: 150
+          example: alex@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          writeOnly: true
+        password_confirmation:
+          type: string
+          format: password
+          writeOnly: true
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          description: Registered email address or username.
+          example: alex@example.com
+        password:
+          type: string
+          format: password
+          writeOnly: true
+    User:
+      type: object
+      required: [id, name, email]
+      properties:
+        id:
+          type: integer
+          example: 12
+        name:
+          type: string
+          example: Alex Doe
+        email:
+          type: string
+          format: email
+          example: alex@example.com
+    RegistrationResponse:
+      type: object
+      required: [detail, user]
+      properties:
+        detail:
+          type: string
+          example: Account created successfully.
+        user:
+          $ref: "#/components/schemas/User"
+    LoginResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+          description: DRF token to use for authenticated requests.
+          example: "0123456789abcdef0123456789abcdef01234567"
+        user:
+          $ref: "#/components/schemas/User"
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          example: alex@example.com
+    ForgotPasswordResponse:
+      type: object
+      required: [detail, expires_in_minutes]
+      properties:
+        detail:
+          type: string
+          example: Si un compte correspond à cette adresse, un code de réinitialisation lui sera envoyé.
+        expires_in_minutes:
+          type: integer
+          example: 5
+    VerifyOtpRequest:
+      type: object
+      required: [email, otp]
+      properties:
+        email:
+          type: string
+          format: email
+          example: alex@example.com
+        otp:
+          type: string
+          minLength: 6
+          maxLength: 6
+          example: "123456"
+    VerifyOtpResponse:
+      type: object
+      required: [detail, email, verified]
+      properties:
+        detail:
+          type: string
+          example: Code OTP validé. Vous pouvez maintenant réinitialiser votre mot de passe.
+        email:
+          type: string
+          format: email
+          example: alex@example.com
+        verified:
+          type: boolean
+          example: true
+    ResetPasswordRequest:
+      type: object
+      required: [email, otp, password, password_confirmation]
+      properties:
+        email:
+          type: string
+          format: email
+          example: alex@example.com
+        otp:
+          type: string
+          minLength: 6
+          maxLength: 6
+          example: "123456"
+        password:
+          type: string
+          format: password
+          minLength: 8
+        password_confirmation:
+          type: string
+          format: password
+          minLength: 8
+    ResetPasswordResponse:
+      type: object
+      required: [detail, email]
+      properties:
+        detail:
+          type: string
+          example: Mot de passe réinitialisé avec succès.
+        email:
+          type: string
+          format: email
+          example: alex@example.com
+    ValidationError:
+      type: object
+      description: Validation errors keyed by request field.
+      additionalProperties:
+        type: array
+        items:
+          type: string
+    AuthenticationError:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          example: Identifiants incorrects.
